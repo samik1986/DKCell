@@ -64,20 +64,20 @@ C.rot_90 = False
 os.environ['OPENCV_IO_ENABLE_JASPER']= '1'
 img_path = options.test_path
 
-model_path = '/nfs/data/main/M32/Training_Data/Keras-FasterRCNN/model_frcnn_mouse.hdf5'
+model_path = 'model_frcnn.hdf5'
 # brainNo = 'm826F'
 filePath = '/home/samik/Keras-FasterRCNN/images/'
-# filePath = '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJP2/Reqd/'
+filePath = '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJP2/Reqd/'
 # filePath = 'tmp/'
 
 # outDirR = '/nfs/data/main/M32/Cell_Detection/CellDetPass1_reg/' + brainNo + '/'
 outDirR = 'tmpOut/'
-# outDirR = ''
+outDirR = ''
 # jsonOutG = os.path.join(outDirR, 'jsonG/')
-# jsonOutF = os.path.join(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJSON/')
-# maskOut = os.path.join(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionOP/')
-jsonOutF = os.path.join(outDirR, 'jsonF/')
-maskOut = os.path.join(outDirR, 'mask/')
+jsonOutF = os.path.join(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJSON/')
+maskOut = os.path.join(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionOP/')
+# jsonOutF = os.path.join(outDirR, 'jsonF/')
+# maskOut = os.path.join(outDirR, 'mask/')
 
 
 os.system("mkdir " + outDirR)
@@ -118,9 +118,9 @@ def imwrite_fast(img_path, opImg):
     base_C = base_C[0:-4]
     base = os.path.basename(img_path)
     base = base[0:-4]
-    img = imsave('temp1/'+base+'.tif', opImg)
-    err_code = os.system("kdu_compress -i temp1/"+base_C+".tif -o "+img_path_C+" -rate 1 Creversible=yes Clevels=7 Clayers=8 Stiles=\{1024,1024\} Corder=RPCL Cuse_sop=yes ORGgen_plt=yes ORGtparts=R Cblk=\{32,32\} -num_threads 32")
-    os.system("rm temp1/"+base_C+'.tif')
+    img = imsave('temp/'+base+'.tif', opImg)
+    err_code = os.system("kdu_compress -i temp/"+base_C+".tif -o "+img_path_C+" -rate 1 Creversible=yes Clevels=7 Clayers=8 Stiles=\{1024,1024\} Corder=RPCL Cuse_sop=yes ORGgen_plt=yes ORGtparts=R Cblk=\{32,32\} -num_threads 32")
+    os.system("rm temp/"+base_C+'.tif')
 
 def format_img_size(img, C):
     """ formats the image size based on config """
@@ -232,17 +232,17 @@ for files in fileList1:
     print(image1.shape)
     image1 = image1//16
     image1 = np.clip(image1, 0, 255)
-    image = image1.astype(np.uint8) 
+    image1 = image1.astype(np.uint8) 
     # image1 = np.rot90(image1, -1)
     # imwrite_fast(os.path.join(maskOut,files), image1)
     org_w, org_h = image1.shape
     
     maskB = np.ones((org_w,org_h),dtype='bool')
     maskB = np.uint8(maskB) * 255
-    # image = np.zeros((org_w,org_h,3),dtype=np.uint8) 
-    # image[:, :, 0] = 0
-    # image[:, :, 1] = image1
-    # image[:, :, 2] = 0
+    image = np.zeros((org_w,org_h,3),dtype=np.uint8) 
+    image[:, :, 0] = 0
+    image[:, :, 1] = image1
+    image[:, :, 2] = 0
     # imwrite_fast(os.path.join(maskOut,files), image))
     op = np.zeros((org_w, org_h), dtype='uint8')
     op1 = np.zeros((org_w,org_h,3), dtype='uint8')

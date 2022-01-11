@@ -12,18 +12,16 @@ from keras import backend as K
 from keras.layers import Input
 from keras.models import Model
 from keras_frcnn import roi_helpers
-from skimage.io import imread, imsave
-# from skimage.transform import rotate
+from skimage.io import imread
 from scipy import misc 
 from scipy.io import loadmat
-from keras_frcnn import configDK, data_generators
+from keras_frcnn import config, data_generators
 import h5py
 import hdf5storage
 import bisect
 import statistics
 from scipy.ndimage.morphology import binary_fill_holes
 import fnmatch
-from scipy.ndimage.interpolation import rotate
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 cfg = tf.ConfigProto()
@@ -44,7 +42,7 @@ parser.add_option("--network", dest="network", help="Base network to use. Suppor
 # with open(config_output_filename, 'rb') as f_in:
 #     C = pickle.load(f_in)
 
-C = configDK.Config()
+C = config.Config()
 
 print(C)
 
@@ -64,100 +62,48 @@ C.rot_90 = False
 os.environ['OPENCV_IO_ENABLE_JASPER']= '1'
 img_path = options.test_path
 
-model_path = 'model_frcnn_DK_May_2021.hdf5'
+model_path = 'model_frcnn_FBN.hdf5'
+brainNo = 'm919F'
+filePath = '/nfs/data/main/M25/marmosetRIKEN/NZ/m919/m919F/JP2/'
+filePath = 'tmp1/'
 
-brainNo = sys.argv[1]
-listmin = int(sys.argv[2])
-listmax = int(sys.argv[3])
-fileType = sys.argv[4]
-fileHeadPath = sys.argv[5]
-
-# brainNo = 'DK39'
-# filePath = '/home/samik/Keras-FasterRCNN/images/'
-filePath = fileHeadPath + '/' + brainNo + '/CH3/'
-# filePath = '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJP2/Reqd/'
-# filePath = '/nfs/data/main/M32/RegistrationData/Data/' + brainNo + '/legacy/Transformation_OUTPUT/' + brainNo + '_img/'
-
-# outDirR = '/nfs/data/main/M32/Cell_Detection/CellDetPass1_unreg/' + brainNo + '/'
-outDirR = '/home/samik/mnt/gpu5b_1/nfs/data/main/M32/Cell_Detection/CellDetPass1_unreg/' + brainNo + '/'
-# outDirR = 'tmpOut/'
-# outDirR = ''
-jsonOutG = os.path.join(outDirR, 'jsonG/')
-# jsonOutF = os.pathjoin(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionJSON/')
-# maskOut = os.path.join(outDirR, '/nfs/data/main/M31/KleinfeldU19/training_images/DK55/CH3/cell_detectionOP/')
-# jsonOutF = os.path.join(outDirR, 'jsonF/')
+outDirR = '/nfs/data/main/M32/Cell_Detection/CellDetPass1_reg/' + brainNo + '/'
+# jsonOutG = os.path.join(outDirR, 'jsonG/')
+jsonOutF = os.path.join(outDirR, 'jsonF/')
 maskOut = os.path.join(outDirR, 'mask/')
 
-os.system("ls " +  filePath + "*." + fileType + "  | xargs -n 1 basename > " + outDirR +  "/listF.txt")
 
 os.system("mkdir " + outDirR)
 os.system("mkdir " + maskOut)
-# os.system("mkdir " + jsonOutF)
-os.system("mkdir " + jsonOutG)
+os.system("mkdir " + jsonOutF)
+# os.system("mkdir " + jsonOutG)
 
 fileList1 = os.listdir(filePath)
 # print(fileList1)
-# fileList2 = os.listdir(maskOut)
+fileList2 = [] #os.listdir(maskOut)
 
-f=open(outDirR + 'listF.txt')
-fileList1=f.readlines()[listmin: listmax]
-# print(fileList1)
+for fichier in fileList1[:]: # filelist[:] makes a copy of filelist.
+    if not(fnmatch.fnmatch(fichier, '*.jp2')):
+        fileList1.remove(fichier)
 
 # for fichier in fileList1[:]: # filelist[:] makes a copy of filelist.
-#     if not(fnmatch.fnmatch(fichier, '*.jp2')):
+#     if not(fnmatch.fnmatch(fichier, '*F*')):
 #         fileList1.remove(fichier)
 
-# # for fichier in fileList1[:]: # filelist[:] makes a copy of filelist.
-# #     if not(fnmatch.fnmatch(fichier, '*F*')):
-# #         fileList1.remove(fichier)
-
-# for fichier in fileList1[:]: # filelist[:] makes a copy of filelist.
-#         if fichier in fileList2[:]:
-#             fileList1.remove(fichier)
+for fichier in fileList1[:]: # filelist[:] makes a copy of filelist.
+        if fichier in fileList2[:]:
+            fileList1.remove(fichier)
 
 def imread_fast(img_path):
-    img_path = img_path[0:-1]
     img_path_C= img_path.replace("&", "\&")
     base_C = os.path.basename(img_path_C)
     base_C = base_C[0:-4]
     base = os.path.basename(img_path)
     base = base[0:-4]
-    print(base_C)
     err_code = os.system("kdu_expand -i "+img_path_C+" -o temp/"+base_C+".tif -num_threads 16")
     img = imread('temp/'+base+'.tif')
     os.system("rm temp/"+base_C+'.tif')
     return img
-
-def imwrite_fast(img_path, opImg):
-    img_path = img_path[0:-1]
-    img_path_C= img_path.replace("&", "\&")
-    base_C = os.path.basename(img_path_C)
-    base_C = base_C[0:-4]
-    base = os.path.basename(img_path)
-    base = base[0:-4]
-    img = imsave('temp1/'+base+'.tif', opImg)
-    err_code = os.system("kdu_compress -i temp1/"+base_C+".tif -o "+img_path_C+" -rate 1 Creversible=yes Clevels=7 Clayers=8 Stiles=\{1024,1024\} Corder=RPCL Cuse_sop=yes ORGgen_plt=yes ORGtparts=R Cblk=\{32,32\} -num_threads 32")
-    os.system("rm temp1/"+base_C+'.tif')
-
-def pre_proc(image, w,h):
-    # mask1 = 255 - image[:, :, 0]
-    # mask2 = 255 - image[:, :, 1]
-    # _, mask1 = cv2.threshold(mask1, 32, 255, cv2.THRESH_BINARY)
-    _, mask = cv2.threshold(image, 32, 255, cv2.THRESH_BINARY)
-    # mask = np.uint8(mask1 + mask2)
-    mask = cv2.resize(mask, (int(h / 100), int(w / 100)))
-    mask = cv2.medianBlur(mask, 11)
-    mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(25,25)), iterations = 1)
-    mask = cv2.GaussianBlur(mask, (5,5), 0.5)
-    nw,nh = mask.shape
-    mask[0:int(0.1*nw), :] = 0
-    mask[:,0:int(0.05*nh)] = 0
-    mask[nw-int(0.1*nw) : nw, :] = 0
-    mask[:, nh-int(0.05*nh) : nh] = 0
-    _, mask = cv2.threshold(mask, 25, 255, cv2.THRESH_BINARY)
-
-    mask = cv2.resize(mask,(h,w))
-    return mask
 
 def format_img_size(img, C):
     """ formats the image size based on config """
@@ -263,59 +209,42 @@ bbox_threshold = 0.5
 
 visualise = True
 
-f1 = open(os.path.join(jsonOutG, brainNo + '_CH3_premotor.csv'), "w")
-
-
 for files in fileList1:
-    print(os.path.join(filePath, files))
-    if fileType == 'jp2':
-        image1 = imread_fast(os.path.join(filePath, files))
-    else:
-        image1 = imread(os.path.join(filePath, files[0:-1]))
-        image1 = np.squeeze(image1)
-    print(image1.shape)
-    
-    image1 = image1//16
-    image1 = np.clip(image1, 0, 255)
-    image1 = image1.astype(np.uint8) 
-    image1 = np.rot90(image1, 1)
-    # imwrite_fast(os.path.join(maskOut,files), image1)
-    org_w, org_h = image1.shape
-    print(org_w)
-    print(org_h) 
-    # maskB = np.ones((org_w,org_h),dtype='bool')
-    # maskB = np.uint8(maskB) * 255
-    mask = pre_proc(image1, org_w, org_h)
-    # mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
-    # mask = np.uint8(maskB) / 255
-    image = np.zeros((org_w,org_h,3),dtype=np.uint8) 
-    image[:, :, 0] = 0
-    image[:, :, 1] = image1
-    image[:, :, 2] = 0
-
-    del image1
-    # imwrite_fast(os.path.join(maskOut,files), image)
+    print(files)
+    image = imread_fast(os.path.join(filePath, files))
+    org_w, org_h = image.shape
+    maskB = np.ones((org_w,org_h),dtype='bool')
+    maskB = np.uint8(maskB) * 255
+    image = image/256.
+    # image = image.astype(np.uint8)
+    # image[:,:,0] = (image[:,:,0] - np.min(image[:,:,0]))/ (np.max(image[:,:,0]) - np.min(image[:,:,0]))*255.
+    # image[:, :, 1] = (image[:, :, 1] - np.min(image[:, :, 1])) / (np.max(image[:, :, 1]) - np.min(image[:, :, 1])) * 255.
+    # image[:, :, 2] = (image[:, :, 2] - np.min(image[:, :, 2])) / (np.max(image[:, :, 2]) - np.min(image[:, :, 2])) * 255.
+    image = image.astype(np.uint8)
     # op = np.zeros((org_w, org_h), dtype='uint8')
-    # op1 = np.zeros((org_w,org_h,3), dtype='uint8')
-    # print(org_w,org_h)
+    op1 = np.zeros((org_w,org_h,3), dtype='uint8')
+    print(org_w,org_h)
     window = 1024
     count = 0
     st = time.time()
-    ##################################################################################
+    f = open(os.path.join(jsonOutF, files.replace('jp2', 'json')), "w")
+    f.write(
+        "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":\"0\",\"properties\":{\"name\":\"Red Cell\"},\"geometry\":{\"type\":\"MultiPoint\",\"coordinates\":[")
 
     for row in range(0, org_w - window, window):
         for col in range(0, org_h - window, window):
-            tile = image[row:row + window, col:col + window, :]
-            tileM = mask[row:row + window, col:col + window]
+            tile = image[row:row + window, col:col + window]
+            # tile = (tile - np.min(tile)) / (np.max(tile)-np.min(tile)) * 255
+            tileM = maskB[row:row + window, col:col + window]
             # tileOP = np.zeros((window, window), dtype='uint8')
-            # img = np.zeros((window, window, 3), dtype= 'uint8')
+            img = np.zeros((window, window, 3), dtype= 'uint8')
             if np.sum(tileM):
-                img = tile
+                img[:,:,2] = tile
                 X, ratio = format_img(img, C)
                 X = np.transpose(X, (0, 2, 3, 1))
                 # get the feature maps and output from the RPN
                 [Y1, Y2, F] = model_rpn.predict(X)
-                R = roi_helpers.rpn_to_roi(Y1, Y2, C, overlap_thresh=0.7)
+                R = roi_helpers.rpn_to_roi(Y1, Y2, C, overlap_thresh=0.5)
                 # convert from (x1,y1,x2,y2) to (x,y,w,h)
                 R[:, 2] -= R[:, 0]
                 R[:, 3] -= R[:, 1]
@@ -366,58 +295,62 @@ for files in fileList1:
                             # print(new_boxes[jk,:])
                             (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
                             all_dets.append((key,100*new_probs[jk]))
-                            # f1.write(files.replace('.jp2\n','') + ',' + str(row + np.int64(real_x1))+ "," + str(col + np.int64(real_y1)) + ',' + str(row + np.int64(real_x2)) + "," + str(col + np.int64(real_y2)) + "\n" )
                             cen_x = (real_x1 + real_x2)/2
                             cen_y = (real_y1 + real_y2)/2
-                            # print(files.replace('.' + fileType + '\n','') + "," + str(org_w-(row + np.int64(cen_y))) + "," + str(col + np.int64(cen_x)) + "\n" )
-                            f1.write(files.replace('.' + fileType + '\n','') + "," + str(org_w-(row + np.int64(cen_y))) + "," + str(col + np.int64(cen_x)) + "\n" )
-                            # f1.write("[" + str(np.uint16(cen_y + row)) + "," + str(np.uint16(cen_x + col) * -1) + "],")
-
-                            # print(np.uint16(cen_y + row), np.uint16(cen_x + col))
-                            # cv2.rectangle(img, (real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])), 2)
-                            
-                            # textLabel = '{}: {}'.format(key, int(100 * new_probs[jk]))
-                            # all_dets.append((key, 100 * new_probs[jk]))
-                            
-                            # (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
-                            # textOrg = (real_x1, real_y1 - 0)
-                            
-                            # cv2.rectangle(img, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-                            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (0, 0, 0), 2)
-                            # cv2.rectangle(img, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
-                            #               (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
-                            
-                            # # f1.write(files.replace('.jp2\n','') + ',' + str(textOrg[0] - 5)+ "," + str(textOrg[1] + baseLine - 5) + 
-                            # #     ',' + str(textOrg[0] + retval[0] + 5) + "," + str(textOrg[1] - retval[1] - 5) + 
-                            # #     ',' + str(row)  + ','+ str(col)  + ',' + "\n" )
-                            # cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+                            f.write("[" + str(np.uint16(cen_y+ col)) + "," + str(np.uint16(cen_x + row) * -1) + "],")
                             # tileOP[np.uint16(cen_x), np.uint16(cen_y)] = 255
-                # op[row:row + window, col:col + window] = tileOP
-                # op1[row:row + window, col:col + window,:] = img
+                            # print(np.uint16(cen_y + row), np.uint16(cen_x + col))
+                            # f = open(os.path.join(jsonOutF, files.replace('jp2', 'json')), "w")
+                            # f.write(
+                            #     "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":\"0\",\"properties\":{\"name\":\"Red Cell\"},\"geometry\":{\"type\":\"MultiPoint\",\"coordinates\":[")
+                            # for pts in centroids:
+                            #     pts64 = pts.astype(np.int64)
+                            # f.write("[" + str(np.uint16(cen_y)) + "," + str(np.uint16(cen_x) * -1) + "],")
+                            # f.write("[]]}}]}")
+                            # f.close()
 
-    del mask
-    # imwrite_fast(os.path.join(maskOut,files), op)
-    # op = np.rot90(op, -1) 
-    # _, thresh = cv2.threshold(op, 127, 255, cv2.THRESH_BINARY)
-    # _, _, _, centroids = cv2.connectedComponentsWithStats(np.uint8(thresh))
-    # f = open(os.path.join(jsonOutG, files.replace(fileType + '\n', 'json')), "w")
-    # f.write(
-    #     "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":\"0\",\"properties\":{\"name\":\"PreMotor Cells\"},\"geometry\":{\"type\":\"MultiPoint\",\"coordinates\":[")
-    # for pts in centroids:
-    #     pts64 = pts.astype(np.int64)
-    #     # f1.write(files.replace('.jp2\n','') + ',' + str(pts64[1])+ "," + str(pts64[0]) + "\n" )
-    #     f.write("[" + str(pts64[0]) + "," + str(pts64[1] * -1) + "],")
-    # f.write("[]]}}]}")
-    # f.close()
-    # del op
-    # # # print('write')
-    # if fileType == 'jp2':
-    #     imwrite_fast(os.path.join(maskOut,files), op1)
-    # else:
-    #     imsave(os.path.join(maskOut,files[0:-1]), op1)
-    # imsave(os.path.join(maskOut,files), image1)
+                            # _, thresh = cv2.threshold(opG, 127, 255, cv2.THRESH_BINARY)
+                            # _, _, _, centroids = cv2.connectedComponentsWithStats(np.uint8(thresh))
+                            # f = open(os.path.join(jsonOutG, files.replace('jp2', 'json')), "w")
+                            # f.write(
+                            #     "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":\"0\",\"properties\":{\"name\":\"Red Cell\"},\"geometry\":{\"type\":\"MultiPoint\",\"coordinates\":[")
+                            # for pts in centroids:
+                            #     pts64 = pts.astype(np.int64)
+                            #     f.write("[" + str(pts64[0]) + "," + str(pts64[1] * -1) + "],")
+                            # f.write("[]]}}]}")
+                            # f.close()
+
+
+
+                            cv2.rectangle(img, (real_x1, real_y1), (real_x2, real_y2), (
+                            int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])), 2)
+
+                            textLabel = '{}: {}'.format(key, int(100 * new_probs[jk]))
+                            all_dets.append((key, 100 * new_probs[jk]))
+
+                            (retval, baseLine) = cv2.getTextSize(textLabel, cv2.FONT_HERSHEY_COMPLEX, 1, 1)
+                            textOrg = (real_x1, real_y1 - 0)
+
+                            cv2.rectangle(img, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
+                                          (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (0, 0, 0), 2)
+                            cv2.rectangle(img, (textOrg[0] - 5, textOrg[1] + baseLine - 5),
+                                          (textOrg[0] + retval[0] + 5, textOrg[1] - retval[1] - 5), (255, 255, 255), -1)
+                            cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+                op[row:row + window, col:col + window] = tileOP
+                op1[row:row + window, col:col + window,:] = img
+
+    _, thresh = cv2.threshold(op, 127, 255, cv2.THRESH_BINARY)
+    _, _, _, centroids = cv2.connectedComponentsWithStats(np.uint8(thresh))
+    f = open(os.path.join(jsonOutF, files.replace('jp2', 'json')), "w")
+    f.write(
+        "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"id\":\"0\",\"properties\":{\"name\":\"Red Cell\"},\"geometry\":{\"type\":\"MultiPoint\",\"coordinates\":[")
+    for pts in centroids:
+        pts64 = pts.astype(np.int64)
+        f.write("[" + str(pts64[0]) + "," + str(pts64[1] * -1) + "],")
+    f.write("[]]}}]}")
+    f.close()
+
+    cv2.imwrite(os.path.join(maskOut,files), op1)
+
 
     print('Elapsed time = {}'.format(time.time() - st))
-    
-    
-f1.close()

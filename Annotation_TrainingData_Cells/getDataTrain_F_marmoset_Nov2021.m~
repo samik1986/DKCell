@@ -1,0 +1,167 @@
+function getDataTrain_F_marmoset_Nov2021(brainNo, ...
+    fileDir, cellType, ...
+    fid1, fid2, ...
+    annotDir, jpegDir, opcellDir, ...
+    tileSize, T, idx)
+
+bitType = 16;
+disp(brainNo);
+% if cellType == 'R'
+%     chnl = 1;
+% end
+% if cellType == 'G'
+%     chnl = 2;
+% end
+% if cellType == 'F'
+%     chnl = 3;
+% end
+
+chk = idx;
+lChk = chk;
+
+for lChk = 1 : length(chk)
+    data(lChk).imgDir = [fileDir '/annotated' cellType{chk(lChk)} '/' brainNo '/images/'];
+    
+    data(lChk).fileList = dir(fullfile([fileDir 'annotated' cellType{chk(lChk)} '/' brainNo], ...
+        '*.json'));
+end
+
+
+for i = 45 : length(data(lChk).fileList)
+    disp(data(lChk).fileList(i).name);
+    
+    
+    %%
+    data(lChk).fileName1 = strrep(data(lChk).fileList(i).name, '&', '__');
+    try
+        data(lChk).cellJSON = loadjson([fileDir 'annotated' cellType{lChk} '/' brainNo ...
+            '/' data(lChk).fileList(i).name]);
+        if exist([data(lChk).imgDir data(lChk).fileList(i).name(1:end-4) 'jp2'])
+            img = imread([data(lChk).imgDir data(lChk).fileList(i).name(1:end-4) 'jp2']);
+            mask = generateCellMask(data(lChk).cellJSON, img);
+            
+            for row = 1 : tileSize : size(img,1) - tileSize -1
+                for col = 1 : tileSize : size(img,2) - tileSize -1
+                    if size(img,3) == 3
+                        %                     imgTile = uint8(floor(img(row:row+tileSize-1, col:col+tileSize-1, :)/bitType));
+                        imgTile = img(row:row+tileSize-1, col:col+tileSize-1, 3);
+                    end
+                    maskTile = mask(row:row+tileSize-1, col:col+tileSize-1);
+                    
+                    BW_pad = false(tileSize,tileSize);
+                    BW = imbinarize(maskTile);
+                    BW_pad(1:size(BW,1), 1:size(BW,2)) = BW;
+                    numCenters = sum(sum(BW_pad));
+                    
+                    if numCenters
+                        
+                        %                     img_pad = uint8(zeros(tileSize,tileSize,3));
+                        img_pad = uint16(zeros(tileSize,tileSize));
+                        
+                        % Todo: Change the data range for uint16 images
+                        if size(img,3) == 3
+                            %                         img_pad(1:size(imgTile,1), 1:size(imgTile,2),:) = imgTile;
+                            img_pad(1:size(imgTile,1), 1:size(imgTile,2)) = imgTile;
+                        end
+                        
+                        %                     imwrite(img_pad, [jpegDir data(lChk).fileName1(1:end-5) ...
+                        %                         '_' num2str(row) '_' num2str(col) '.jpg']);
+                        
+                        imwrite(img_pad, [jpegDir data(lChk).fileName1(1:end-5) ...
+                            '_' num2str(row) '_' num2str(col) '.tif']);
+                        
+                        
+                        
+                        filename = [annotDir data(lChk).fileName1(1:end-5) ...
+                            '_' num2str(row) '_' num2str(col) '.xml'];
+                        
+                        fid = fopen(filename, 'w');
+                        
+                        %                     fprintf(fid, '<annotation>\n\t<folder>VOC2007</folder>\n\t<filename>%s</filename>', ...
+                        %                         [data(lChk).fileName1(1:end-5) '_' num2str(row) '_' ...
+                        %                         num2str(col) '.jpg']);
+                        
+                        fprintf(fid, '<annotation>\n\t<folder>VOC2007</folder>\n\t<filename>%s</filename>', ...
+                            [data(lChk).fileName1(1:end-5) '_' num2str(row) '_' ...
+                            num2str(col) '.tif']);
+                        
+                        fprintf(fid, '\n\t<size>\n\t\t<width>1024</width>\n\t\t<height>1024</height>');
+                        fprintf(fid, '\n\t\t<depth>3</depth>\n\t</size>\n\t<segmented>0</segmented>');
+                        objectCount = 0;
+                        [x, y] = find(BW_pad);
+                        for j = 1  : numCenters
+                            if ((x(j) + 10 <= size(BW_pad,1)) && ...
+                                    (y(j) + 10 <= size(BW_pad,2)) && ...
+                                    (x(j) - 9 > 0) && ...
+                                    (y(j) - 9 > 0))
+                                objectCount = objectCount  + 1;
+                                maxX = min(x(j) + 10, size(BW_pad,1));
+                                maxY = min(y(j) + 10, size(BW_pad,2));
+                                minX = max(x(j) - 9, 1);
+                                minY = max(y(j) - 9, 1);
+                                
+                                %                             imwrite(img_pad(minX:maxX,minY:maxY,:), [opcellDir data(lChk).fileName1(1:end-5) ...
+                                %                                 '_' num2str(row) '_' num2str(col) '_' ...
+                                %                                 num2str(j) '.jpg']);
+                                
+                                imwrite(img_pad(minX:maxX,minY:maxY,:), [opcellDir data(lChk).fileName1(1:end-5) ...
+                                    '_' num2str(row) '_' num2str(col) '_' ...
+                                    num2str(j) '.tif']);
+                                
+                                fprintf(fid, '\n\t<object>');
+                                fprintf(fid, '\n\t\t<name>');
+                                fprintf(fid, 'Fast Blue');
+                                fprintf(fid, '</name>\n\t\t<pose>Frontal</pose>');
+                                fprintf(fid, '\n\t\t<truncated>0</truncated>\n\t\t<difficult>0</difficult>');
+                                fprintf(fid, '\n\t\t<bndbox>');
+                                fprintf(fid, '\n\t\t\t<xmin>%d</xmin>', minY);
+                                fprintf(fid, '\n\t\t\t<ymin>%d</ymin>', minX);
+                                fprintf(fid, '\n\t\t\t<xmax>%d</xmax>', maxY);
+                                fprintf(fid, '\n\t\t\t<ymax>%d</ymax>', maxX);
+                                fprintf(fid, '\n\t\t</bndbox>\n\t</object>');
+                            end
+                        end
+                        
+                        fprintf(fid, '\n</annotation>');
+                        fclose(fid);
+                        
+                        if objectCount == 0
+                            system(['rm ' filename]);
+                            %                         system(['rm ' jpegDir data(lChk).fileName1(1:end-5) ...
+                            %                             '_' num2str(row) '_' num2str(col) '.jpg']);
+                            
+                            system(['rm ' jpegDir data(lChk).fileName1(1:end-5) ...
+                                '_' num2str(row) '_' num2str(col) '.tif']);
+                        else
+                            fprintf(fid1, '%s\n', [data(lChk).fileName1(1:end-5) '_' ...
+                                num2str(row) '_' num2str(col)]);
+                            fprintf(fid2, '%s\n', [data(lChk).fileName1(1:end-5) '_' ...
+                                num2str(row) '_' num2str(col)]);
+                        end
+                    end
+                end
+            end
+            
+        end
+    catch
+        continue;
+    end
+end
+%%
+
+
+
+
+
+
+
+
+
+%     fprintf(fidTxtDone, '%s\n', brainNo);
+%     brainNo = fgetl(fidTxtReady);
+% end
+
+
+% fclose(fidTxtReady);
+% fclose(fidTxtDone);
+% end
