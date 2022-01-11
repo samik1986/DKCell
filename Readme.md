@@ -8,4 +8,5 @@ Copy these files to the root directory (if not present):
 https://drive.google.com/file/d/1-tkV2Sji0Q5ujR0zQI2NXh3gjJ0RX9IZ/view?usp=sharing
 https://drive.google.com/file/d/1D0MHlPJD5cxjfRRwSqx02ObvdFbfnSYd/view?usp=sharing
 
-
+To run the code:
+Refer to https://docs.google.com/document/d/1I0-RTK8i9pJ3iufsOdk87v9NPrLsCSqyIbwg2LLnziU/edit?usp=sharing
